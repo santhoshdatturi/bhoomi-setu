@@ -13,7 +13,6 @@ export const fileStatusEnum = pgEnum("file_status", [
 ]);
 
 export const userRoleEnum = pgEnum("user_role", [
-  "user",
   "admin",
-  "staff",
+  "reviewer",
 ]);
