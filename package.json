@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:migrate": "tsx ./lib/db/migrate.ts",
-    "db:push": "drizzle-kit push --config=drizzle.config.ts"
+    "db:push": "drizzle-kit push --config=drizzle.config.ts",
+    "user:create": "tsx ./scripts/create-user.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",

@@ -22,6 +22,9 @@ export const ServiceErrorCode = {
   // ── Database ──────────────────────────────────────────────
   DB_ERROR: "DB_ERROR",
 
+  // ── AI Service / Extraction ────────────────────────────────
+  AI_SERVICE_ERROR: "AI_SERVICE_ERROR",
+
   // ── Catch-all ─────────────────────────────────────────────
   INTERNAL: "INTERNAL",
 } as const;
@@ -51,6 +54,8 @@ export const ERROR_MESSAGES: Record<ServiceErrorCode, string> = {
     "This file is currently in use and cannot be deleted.",
   [ServiceErrorCode.DB_ERROR]:
     "A database error occurred. Please try again.",
+  [ServiceErrorCode.AI_SERVICE_ERROR]:
+    "An error occurred while communicating with the AI service.",
   [ServiceErrorCode.INTERNAL]:
     "An unexpected error occurred. Please try again later.",
 };
@@ -68,6 +73,7 @@ const HTTP_STATUS: Record<ServiceErrorCode, number> = {
   [ServiceErrorCode.FILE_OPERATION_FAILED]: 500,
   [ServiceErrorCode.FILE_IN_USE]: 409,
   [ServiceErrorCode.DB_ERROR]: 500,
+  [ServiceErrorCode.AI_SERVICE_ERROR]: 502,
   [ServiceErrorCode.INTERNAL]: 500,
 };
 
@@ -123,4 +129,28 @@ export function fail(
       statusCode: HTTP_STATUS[code],
     },
   };
+}
+
+/** Convert a ServiceResult into a standard NextResponse for API routes. */
+import { NextResponse } from "next/server";
+
+export function toApiResponse<T>(
+  result: ServiceResult<T>,
+  successStatus: number = 200
+): NextResponse {
+  if (result.success) {
+    return NextResponse.json({ success: true, data: result.data }, { status: successStatus });
+  }
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: result.error.code,
+        message: result.error.userMessage,
+        details: result.error.message !== result.error.userMessage ? result.error.message : undefined,
+      },
+    },
+    { status: result.error.statusCode }
+  );
 }

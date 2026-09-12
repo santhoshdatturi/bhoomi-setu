@@ -1,10 +1,8 @@
 import { pgEnum } from "drizzle-orm/pg-core";
 
 export const fileBucketEnum = pgEnum("file_bucket", [
-  "bhoomi-setu-app",
-  "bhoomi-setu-public",
-  "bhoomi-setu-private",
-  "bhoomi-setu-documents",
+  "app",
+  "documents",
 ]);
 
 export const fileStatusEnum = pgEnum("file_status", [
@@ -15,4 +13,31 @@ export const fileStatusEnum = pgEnum("file_status", [
 export const userRoleEnum = pgEnum("user_role", [
   "admin",
   "reviewer",
+]);
+
+export const documentTypeEnum = pgEnum("document_type", [
+  "rtc",
+  "khata",
+  "mutation",
+  "sale_deed",
+  "patta",
+  "land_tax_receipt",
+  "survey_map",
+  "other",
+  "unknown",
+]);
+
+export const documentStatusEnum = pgEnum("document_status", [
+  "uploaded",
+  "processing",
+  "extracted",
+  "failed",
+]);
+
+export const extractionStatusEnum = pgEnum("extraction_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+  "review_required",
 ]);

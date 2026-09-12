@@ -53,3 +53,26 @@ export async function deleteFileFromStorage(bucket: string, fileId: string) {
 
   return s3Client.send(command);
 }
+
+/**
+ * Get presigned URL for a file
+ */
+export async function getFileUrl(bucket: string, fileId: string) {
+  return generatePresignedDownloadUrl(bucket, fileId);
+}
+
+/**
+ * Fetch raw file bytes from S3 storage
+ */
+export async function getFileBytes(bucket: string, fileId: string): Promise<Buffer> {
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: fileId,
+  });
+  const response = await s3Client.send(command);
+  if (!response.Body) {
+    throw new Error(`Empty body returned for file ${fileId} in bucket ${bucket}`);
+  }
+  const byteArray = await response.Body.transformToByteArray();
+  return Buffer.from(byteArray);
+}
