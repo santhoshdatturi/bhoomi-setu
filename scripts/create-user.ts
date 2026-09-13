@@ -6,7 +6,7 @@ import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import { eq } from "drizzle-orm";
 import * as schema from "../lib/db/schema";
-import { profiles } from "../lib/db/schema/users";
+import { users } from "../lib/db/schema/auth";
 
 // Load environment variables (.env.local prioritized)
 dotenv.config({ path: ".env.local" });
@@ -38,7 +38,7 @@ function parseArgs() {
 
 async function main() {
   console.log("==================================================");
-  console.log("       Bhoomi Setu — User Creation Script         ");
+  console.log("       BhuSamanvay — User Creation Script         ");
   console.log("==================================================\n");
 
   const parsed = parseArgs();
@@ -95,12 +95,6 @@ async function main() {
     role = "admin";
   }
 
-  const neonAuthBaseUrl = process.env.NEON_AUTH_BASE_URL || process.env.NEXT_PUBLIC_NEON_AUTH_URL;
-  if (!neonAuthBaseUrl) {
-    console.error("Error: Missing NEON_AUTH_BASE_URL in environment (.env.local).");
-    process.exit(1);
-  }
-
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     console.error("Error: Missing DATABASE_URL in environment (.env.local).");
@@ -111,113 +105,76 @@ async function main() {
   console.log(`  Name:     ${name}`);
   console.log(`  Email:    ${email}`);
   console.log(`  Role:     ${role}`);
-  console.log(`  Endpoint: ${neonAuthBaseUrl}`);
-  console.log("\n[1/2] Creating Auth User in Neon Auth...");
+  console.log("\n[1/2] Creating Auth User in Better Auth...");
 
-  let authUserId: string;
+  let authUserId: string | undefined;
 
   try {
-    // 1. Call Neon Auth / Better Auth sign-up endpoint
-    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const signUpUrl = `${neonAuthBaseUrl.replace(/\/+$/, "")}/sign-up/email`;
-    const res = await fetch(signUpUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Origin": origin,
-        "Referer": `${origin}/`,
-      },
-      body: JSON.stringify({
+    const { auth } = await import("../lib/auth");
+    const signUpRes = await auth.api.signUpEmail({
+      body: {
         name,
         email,
         password,
-      }),
+      },
     });
 
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok || !data) {
-      const errorMsg = data?.message || data?.error || res.statusText || "Sign up request failed";
-
-      // If user already exists in Neon Auth, attempt sign-in to retrieve ID
-      if (errorMsg.toLowerCase().includes("already exists") || res.status === 422 || res.status === 409) {
-        console.log("User already registered in Neon Auth. Attempting credential verification...");
-        const signInUrl = `${neonAuthBaseUrl.replace(/\/+$/, "")}/sign-in/email`;
-        const signInRes = await fetch(signInUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Origin": origin,
-            "Referer": `${origin}/`,
-          },
-          body: JSON.stringify({ email, password }),
+    if (signUpRes?.user?.id) {
+      authUserId = signUpRes.user.id;
+      console.log(`✓ Better Auth user created with ID: ${authUserId}`);
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    if (
+      errorMsg.toLowerCase().includes("already exists") ||
+      errorMsg.toLowerCase().includes("duplicate")
+    ) {
+      console.log("User already registered in Better Auth. Attempting credential verification...");
+      try {
+        const { auth } = await import("../lib/auth");
+        const signInRes = await auth.api.signInEmail({
+          body: { email, password },
         });
-        const signInData = await signInRes.json().catch(() => null);
-        const existingUser = signInData?.user || signInData;
-        if (signInRes.ok && existingUser?.id) {
-          authUserId = existingUser.id;
+        if (signInRes?.user?.id) {
+          authUserId = signInRes.user.id;
           console.log(`✓ Verified existing user ID: ${authUserId}`);
         } else {
-          console.error(`Auth registration failed: ${errorMsg}`);
+          console.error("Authentication failed: invalid credentials.");
           process.exit(1);
         }
-      } else {
-        console.error(`Auth creation failed (${res.status}): ${errorMsg}`);
+      } catch (signInErr) {
+        console.error("Sign-in verification failed:", signInErr);
         process.exit(1);
       }
     } else {
-      const user = data.user || data;
-      if (!user?.id) {
-        console.error("Unexpected response from Neon Auth:", JSON.stringify(data, null, 2));
-        process.exit(1);
-      }
-
-      authUserId = user.id;
-      console.log(`✓ Neon Auth user created with ID: ${authUserId}`);
+      console.error(`Auth creation failed: ${errorMsg}`);
+      process.exit(1);
     }
-  } catch (err) {
-    console.error("Failed to connect to Neon Auth service:", err);
+  }
+
+  if (!authUserId) {
+    console.error("Failed to determine auth user ID.");
     process.exit(1);
   }
 
-  // 2. Insert/Upsert into profiles table
-  console.log("\n[2/2] Registering Profile in Database...");
+
+  // 2. Update user role in database
+  console.log("\n[2/2] Updating User Role in Database...");
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const db = drizzle(pool, { schema });
 
   try {
-    const [existingProfile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.authUserId, authUserId))
-      .limit(1);
+    const [updated] = await db
+      .update(users)
+      .set({
+        role,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, authUserId))
+      .returning();
 
-    if (existingProfile) {
-      // Update existing profile role/name if necessary
-      const [updated] = await db
-        .update(profiles)
-        .set({
-          displayName: name,
-          role,
-          isActive: true,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(profiles.id, existingProfile.id))
-        .returning();
-
-      console.log(`✓ Profile updated successfully (Profile ID: ${updated.id})`);
-    } else {
-      const [newProfile] = await db
-        .insert(profiles)
-        .values({
-          authUserId,
-          displayName: name,
-          role,
-          isActive: true,
-        })
-        .returning();
-
-      console.log(`✓ Profile created successfully (Profile ID: ${newProfile.id})`);
+    if (updated) {
+      console.log(`✓ User role updated successfully: ${updated.role}`);
     }
 
     console.log("\n==================================================");

@@ -1,4 +1,5 @@
-import { auth } from "@/lib/auth/server";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { DocumentWorkspace } from "@/components/documents/document-workspace";
 import * as documentsService from "@/lib/services/documents.service";
@@ -13,16 +14,21 @@ export async function generateMetadata({ params }: DocumentPageProps) {
   const { id } = await params;
   const docResult = await documentsService.get(id);
   if (!docResult.success) {
-    return { title: "Document Not Found | Bhoomi Setu" };
+    return {
+      title: "Document Not Found | BhuSamanvay",
+    };
   }
+
   return {
-    title: `${docResult.data.title} | Bhoomi Setu`,
+    title: `${docResult.data.fileName} | BhuSamanvay`,
     description: `Digitized Land Record extraction for ${docResult.data.fileName}`,
   };
 }
 
 export default async function DocumentDetailPage({ params }: DocumentPageProps) {
-  const { data: session } = await auth.getSession();
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 
   if (!session?.user) {
     redirect("/auth/sign-in");

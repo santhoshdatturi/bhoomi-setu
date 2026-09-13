@@ -79,7 +79,7 @@ export function AuthLoginForm() {
             BS
           </div>
           <h1 className="font-sans text-2xl font-bold tracking-tight">
-            Bhoomi Setu
+            BhuSamanvay
           </h1>
           <p className="text-sm text-muted-foreground text-balance">
             Intelligent Land Record Digitization and Validation

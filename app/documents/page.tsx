@@ -1,15 +1,18 @@
-import { auth } from "@/lib/auth/server";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { DocumentListView } from "@/components/documents/document-list-view";
 import * as documentsService from "@/lib/services/documents.service";
 
 export const metadata = {
-  title: "Documents | Bhoomi Setu",
+  title: "Documents | BhuSamanvay",
   description: "Land Record Digitization & Verification Workspace",
 };
 
 export default async function DocumentsPage() {
-  const { data: session } = await auth.getSession();
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 
   if (!session?.user) {
     redirect("/auth/sign-in");

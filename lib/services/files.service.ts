@@ -17,7 +17,7 @@ import {
 } from "@/lib/storage";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createLogger } from "@/lib/logger";
-import { requireAuth } from "./auth";
+import { requireAuth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
 const log = createLogger("files.service");

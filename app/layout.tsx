@@ -26,10 +26,10 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "Bhoomi Setu",
-    template: "%s | Bhoomi Setu",
+    default: "BhuSamanvay",
+    template: "%s | BhuSamanvay",
   },
-  description: "Bhoomi Setu Platform",
+  description: "BhuSamanvay Platform",
 };
 
 export default function RootLayout({

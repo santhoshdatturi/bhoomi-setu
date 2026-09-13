@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/services/auth";
+import { requireAuth } from "@/lib/auth";
 import * as documentsService from "@/lib/services/documents.service";
 import * as filesService from "@/lib/services/files.service";
 import * as extractionsService from "@/lib/services/extractions.service";

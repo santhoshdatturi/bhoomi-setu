@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/services/auth";
-import { getByAuthId, update } from "@/lib/services/users.service";
+import { requireAuth } from "@/lib/auth";
+import { update } from "@/lib/services/users.service";
 import { ServiceErrorCode } from "@/lib/services/errors";
 
 export async function PATCH(
@@ -17,24 +17,12 @@ export async function PATCH(
   }
 
   const authUser = authResult.data;
-  const callerProfileResult = await getByAuthId(authUser.id);
 
-  if (!callerProfileResult.success) {
+  // 2. Authorize caller (only admin can update users)
+  if (authUser.role !== "admin") {
     return NextResponse.json(
       {
-        error: "Access denied. User profile not found in database.",
-        code: ServiceErrorCode.FORBIDDEN,
-      },
-      { status: 403 }
-    );
-  }
-
-  // 2. Authorize caller (only admin can update profiles)
-  const callerProfile = callerProfileResult.data;
-  if (callerProfile.role !== "admin") {
-    return NextResponse.json(
-      {
-        error: "Only administrators are authorized to update user profiles.",
+        error: "Only administrators are authorized to update users.",
         code: ServiceErrorCode.FORBIDDEN,
       },
       { status: 403 }

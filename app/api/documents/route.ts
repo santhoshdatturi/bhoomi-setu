@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/services/auth";
+import { requireAuth } from "@/lib/auth";
 import * as documentsService from "@/lib/services/documents.service";
 import { documentFilterSchema, insertDocumentSchema } from "@/lib/validations/documents";
 import { toApiResponse, fail, ServiceErrorCode } from "@/lib/services/errors";

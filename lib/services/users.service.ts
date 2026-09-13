@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { profiles } from "@/lib/db/schema/users";
+import { users } from "@/lib/db/schema/auth";
 import { eq } from "drizzle-orm";
 import {
   type ServiceResult,
@@ -7,15 +7,14 @@ import {
   ok,
   fail,
 } from "@/lib/services/errors";
-import type { Profile } from "@/lib/db/types";
-import { insertProfileSchema, updateProfileSchema } from "@/lib/validations/users";
-
+import type { UserRecord } from "@/lib/db/types";
+import { insertUserSchema, updateUserSchema } from "@/lib/validations/users";
 
 export async function create(
-  payload: typeof profiles.$inferInsert
-): Promise<ServiceResult<Profile>> {
+  payload: typeof users.$inferInsert
+): Promise<ServiceResult<UserRecord>> {
   try {
-    const validationResult = insertProfileSchema.safeParse(payload);
+    const validationResult = insertUserSchema.safeParse(payload);
     if (!validationResult.success) {
       return fail(
         ServiceErrorCode.VALIDATION_FAILED,
@@ -24,85 +23,64 @@ export async function create(
     }
 
     const { data } = validationResult;
-    const [profile] = await db
-      .insert(profiles)
+    const [user] = await db
+      .insert(users)
       .values({
         ...data,
       })
       .returning();
 
-    if (!profile) {
+    if (!user) {
       return fail(
         ServiceErrorCode.DB_ERROR,
-        "Failed to insert profile record"
+        "Failed to insert user record"
       );
     }
 
-    return ok(profile);
+    return ok(user);
   } catch (error) {
     return fail(
       ServiceErrorCode.DB_ERROR,
-      "Unhandled database error during profile creation",
+      "Unhandled database error during user creation",
       error
     );
   }
 }
 
-export async function get(id: string): Promise<ServiceResult<Profile>> {
+export async function get(id: string): Promise<ServiceResult<UserRecord>> {
   try {
-    const [profile] = await db
+    const [user] = await db
       .select()
-      .from(profiles)
-      .where(eq(profiles.id, id))
+      .from(users)
+      .where(eq(users.id, id))
       .limit(1);
 
-    if (!profile) {
-      return fail(ServiceErrorCode.NOT_FOUND, `Profile not found with ID: ${id}`);
+    if (!user) {
+      return fail(ServiceErrorCode.NOT_FOUND, `User not found with ID: ${id}`);
     }
 
-    return ok(profile);
+    return ok(user);
   } catch (error) {
     return fail(
       ServiceErrorCode.DB_ERROR,
-      "Unhandled database error during profile fetch",
+      "Unhandled database error during user fetch",
       error
     );
   }
 }
 
-export async function getByAuthId(authUserId: string): Promise<ServiceResult<Profile>> {
-  try {
-    const [profile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.authUserId, authUserId))
-      .limit(1);
-
-    if (!profile) {
-      return fail(
-        ServiceErrorCode.NOT_FOUND,
-        `Profile not found with Auth User ID: ${authUserId}`
-      );
-    }
-
-    return ok(profile);
-  } catch (error) {
-    return fail(
-      ServiceErrorCode.DB_ERROR,
-      "Unhandled database error during profile fetch by auth ID",
-      error
-    );
-  }
+export async function getByAuthId(authUserId: string): Promise<ServiceResult<UserRecord>> {
+  return get(authUserId);
 }
 
-export async function list(): Promise<ServiceResult<Profile[]>> {
+export async function list(): Promise<ServiceResult<UserRecord[]>> {
   try {
-    const results = await db.select().from(profiles);
+    const results = await db.select().from(users);
     return ok(results);
   } catch (error) {
     return fail(
       ServiceErrorCode.DB_ERROR,
-      "Unhandled database error during profiles listing",
+      "Unhandled database error during users listing",
       error
     );
   }
@@ -110,10 +88,10 @@ export async function list(): Promise<ServiceResult<Profile[]>> {
 
 export async function update(
   id: string,
-  payload: Partial<typeof profiles.$inferInsert>
-): Promise<ServiceResult<Profile>> {
+  payload: Partial<typeof users.$inferInsert>
+): Promise<ServiceResult<UserRecord>> {
   try {
-    const validationResult = updateProfileSchema.safeParse(payload);
+    const validationResult = updateUserSchema.safeParse(payload);
     if (!validationResult.success) {
       return fail(
         ServiceErrorCode.VALIDATION_FAILED,
@@ -122,25 +100,26 @@ export async function update(
     }
 
     const { data } = validationResult;
-    const [profile] = await db
-      .update(profiles)
+    const [user] = await db
+      .update(users)
       .set({
         ...data,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date(),
       })
-      .where(eq(profiles.id, id))
+      .where(eq(users.id, id))
       .returning();
 
-    if (!profile) {
-      return fail(ServiceErrorCode.NOT_FOUND, `Profile not found to update with ID: ${id}`);
+    if (!user) {
+      return fail(ServiceErrorCode.NOT_FOUND, `User not found to update with ID: ${id}`);
     }
 
-    return ok(profile);
+    return ok(user);
   } catch (error) {
     return fail(
       ServiceErrorCode.DB_ERROR,
-      "Unhandled database error during profile update",
+      "Unhandled database error during user update",
       error
     );
   }
 }
+

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/services/auth";
+import { requireAuth } from "@/lib/auth";
 import * as filesService from "@/lib/services/files.service";
 import { toApiResponse, fail, ok, ServiceErrorCode } from "@/lib/services/errors";
 

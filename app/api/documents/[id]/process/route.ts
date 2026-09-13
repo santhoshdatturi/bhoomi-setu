@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/services/auth";
+import { requireAuth } from "@/lib/auth";
 import * as extractionsService from "@/lib/services/extractions.service";
 import { toApiResponse } from "@/lib/services/errors";
 
