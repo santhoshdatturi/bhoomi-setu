@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, index, jsonb, integer } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { documentTypeEnum, documentStatusEnum } from "./enums";
 import { files } from "./files";
@@ -16,6 +16,10 @@ export const documents = pgTable(
     status: documentStatusEnum("status").default("uploaded").notNull(),
     state: text("state"),
     uploadedBy: text("uploaded_by").notNull(),
+    extractedData: jsonb("extracted_data"),
+    confidenceScore: integer("confidence_score"),
+    errorDetails: jsonb("error_details"),
+    committedAt: timestamp("committed_at", { mode: "string" }),
     createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
   },

@@ -13,10 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Upload01Icon,
   File01Icon,
   CheckmarkCircle02Icon,
-  Layers01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
@@ -24,14 +30,14 @@ import { cn } from "@/lib/utils";
 import { INDIAN_STATES } from "@/lib/constants/states";
 
 const DOCUMENT_TYPES = [
-  { value: "parcel", label: "Parcel (Cadastral / 7/12)", desc: "Survey parcel and village record" },
-  { value: "ownership", label: "Ownership (RoR / 1-B / Jamabandi)", desc: "Record of Rights & Pattadar details" },
-  { value: "cultivation", label: "Cultivation (Adangal / Pahani)", desc: "Crop, tenancy & cultivator record" },
-  { value: "mutation", label: "Mutation (Ferfar / Dakhil Kharij)", desc: "Title transfer and order history" },
-  { value: "account_holding", label: "Account / Holding (Khata / 8A)", desc: "Consolidated holding & tax record" },
-  { value: "encumbrance", label: "Encumbrance Certificate (EC)", desc: "Mortgages, liens & charges" },
-  { value: "spatial_map", label: "Spatial Map (FMB / Cadastral)", desc: "Field measurement & boundary map" },
-  { value: "property_card", label: "Property Card (Urban CTS)", desc: "City title and municipal card" },
+  { value: "parcel", label: "Parcel (Cadastral / Survey Parcel)" },
+  { value: "ownership", label: "Ownership (Record of Rights / RoR)" },
+  { value: "cultivation", label: "Cultivation (Pahani / Adangal)" },
+  { value: "mutation", label: "Mutation (Ferfar / Transfer Record)" },
+  { value: "account_holding", label: "Account / Holding (Khata / 8A)" },
+  { value: "encumbrance", label: "Encumbrance Certificate (EC)" },
+  { value: "spatial_map", label: "Spatial Map (FMB / Cadastral Map)" },
+  { value: "property_card", label: "Property Card (Urban Title / CTS)" },
 ];
 
 interface DocumentUploadModalProps {
@@ -45,8 +51,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [documentType, setDocumentType] = useState<string>("");
-  const [stateName, setStateName] = useState("Karnataka");
-  const [autoProcess, setAutoProcess] = useState(true);
+  const [stateName, setStateName] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>("");
 
@@ -55,7 +60,6 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
   const handleFileChange = (selectedFile: File) => {
     setFile(selectedFile);
     if (!title) {
-      // Clean filename for initial title
       const cleanName = selectedFile.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
       setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
     }
@@ -79,7 +83,11 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
       return;
     }
     if (!documentType) {
-      toast.error("Please select a document type");
+      toast.error("Please select a document classification type");
+      return;
+    }
+    if (!stateName) {
+      toast.error("Please select a state jurisdiction");
       return;
     }
 
@@ -87,7 +95,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
     setUploadProgress("Uploading document file...");
 
     try {
-      // 1. Upload file to server endpoint (avoids browser S3 CORS issues)
+      // 1. Upload file to server endpoint
       const formData = new FormData();
       formData.append("file", file);
 
@@ -124,17 +132,15 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
 
       const newDoc = docJson.data;
 
-      // 3. Optionally trigger processing right away
-      if (autoProcess) {
-        setUploadProgress("Initiating document digitization pipeline...");
-        fetch(`/api/documents/${newDoc.id}/process`, {
-          method: "POST",
-        }).catch(() => {
-          // background process
-        });
-      }
+      // 3. Always trigger extraction pipeline immediately on upload
+      setUploadProgress("Initiating document digitization pipeline...");
+      fetch(`/api/documents/${newDoc.id}/process`, {
+        method: "POST",
+      }).catch(() => {
+        // background process
+      });
 
-      toast.success("Land record document uploaded successfully!");
+      toast.success("Document uploaded! Extraction started automatically.");
       setOpen(false);
       resetForm();
       onSuccess?.();
@@ -151,7 +157,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
     setFile(null);
     setTitle("");
     setDocumentType("");
-    setStateName("Karnataka");
+    setStateName("");
   };
 
   return (
@@ -239,69 +245,42 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
             />
           </div>
 
-          {/* State / Jurisdiction */}
+          {/* State / Jurisdiction Selector (shadcn Select) */}
           <div className="space-y-1.5">
-            <Label htmlFor="state-name" className="text-xs font-medium">
-              State / Jurisdiction
-            </Label>
-            <select
-              id="state-name"
-              value={stateName}
-              onChange={(e) => setStateName(e.target.value)}
-              className="w-full text-xs h-9 rounded-md border border-input bg-transparent px-3 py-1 shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="" className="bg-background text-foreground">
-                Auto-detect / Other State
-              </option>
-              {INDIAN_STATES.map((state) => (
-                <option key={state} value={state} className="bg-background text-foreground">
-                  {state}
-                </option>
-              ))}
-            </select>
+            <Label className="text-xs font-medium">State / Jurisdiction</Label>
+            <Select value={stateName} onValueChange={(val) => setStateName(val as string)}>
+              <SelectTrigger className="w-full text-xs h-9">
+                <SelectValue placeholder="Select state jurisdiction..." />
+              </SelectTrigger>
+              <SelectContent>
+                {INDIAN_STATES.map((state) => (
+                  <SelectItem key={state} value={state} className="text-xs">
+                    {state}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Document Type Selector (Radio Style) */}
+          {/* Document Type Selector (shadcn Select) */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Document Classification</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {DOCUMENT_TYPES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setDocumentType(t.value)}
-                  className={cn(
-                    "flex flex-col text-left p-2 rounded-md border text-xs transition-colors",
-                    documentType === t.value
-                      ? "border-primary bg-primary/10 text-primary font-medium shadow-2xs"
-                      : "border-border/70 bg-card hover:bg-muted/40 text-muted-foreground"
-                  )}
-                >
-                  <span className="font-semibold">{t.label}</span>
-                  <span className="text-[10px] text-muted-foreground line-clamp-1">
-                    {t.desc}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Auto process checkbox */}
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="auto-process"
-              checked={autoProcess}
-              onChange={(e) => setAutoProcess(e.target.checked)}
-              className="rounded border-border size-3.5 accent-primary"
-            />
-            <Label
-              htmlFor="auto-process"
-              className="text-xs text-muted-foreground flex items-center gap-1 cursor-pointer select-none"
+            <Select
+              value={documentType}
+              onValueChange={(val) => setDocumentType(val as string)}
+              items={DOCUMENT_TYPES}
             >
-              <HugeiconsIcon icon={Layers01Icon} className="size-3 text-primary" />
-              <span>Automatically digitize and extract record upon upload</span>
-            </Label>
+              <SelectTrigger className="w-full text-xs h-9">
+                <SelectValue placeholder="Select document classification type..." />
+              </SelectTrigger>
+              <SelectContent>
+                {DOCUMENT_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value} className="text-xs">
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Progress / Status indicator */}
@@ -330,7 +309,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
               className="gap-1.5 font-mono text-xs"
             >
               <HugeiconsIcon icon={Upload01Icon} className="size-3.5" />
-              <span>{isUploading ? "Uploading..." : "Upload & Continue"}</span>
+              <span>{isUploading ? "Uploading..." : "Upload & Digitize"}</span>
             </Button>
           </div>
         </form>
@@ -338,3 +317,4 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
     </Dialog>
   );
 }
+

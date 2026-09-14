@@ -1,52 +1,24 @@
 import { db } from "@/lib/db";
-import { extractions } from "@/lib/db/schema/extractions";
 import { documents } from "@/lib/db/schema/documents";
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   type ServiceResult,
   ServiceErrorCode,
   ok,
   fail,
 } from "@/lib/services/errors";
-import type { ExtractionRecord } from "@/lib/db/types";
+import type { DocumentRecord } from "@/lib/db/types";
 import * as documentsService from "@/lib/services/documents.service";
 import * as filesService from "@/lib/services/files.service";
 import * as extractionEngineService from "@/lib/services/extraction-engine.service";
+import { type DocumentErrorDetails } from "@/lib/validations/documents";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("extractions.service");
 
-export async function getLatestByDocumentId(
-  documentId: string
-): Promise<ServiceResult<ExtractionRecord>> {
-  try {
-    const [latestExtraction] = await db
-      .select()
-      .from(extractions)
-      .where(eq(extractions.documentId, documentId))
-      .orderBy(desc(extractions.createdAt))
-      .limit(1);
-
-    if (!latestExtraction) {
-      return fail(
-        ServiceErrorCode.NOT_FOUND,
-        `No extraction found for document ID: ${documentId}`
-      );
-    }
-
-    return ok(latestExtraction);
-  } catch (error) {
-    return fail(
-      ServiceErrorCode.DB_ERROR,
-      `Failed to retrieve extraction for document ID: ${documentId}`,
-      error
-    );
-  }
-}
-
 export async function processDocument(
   documentId: string
-): Promise<ServiceResult<ExtractionRecord>> {
+): Promise<ServiceResult<DocumentRecord>> {
   const modelName = process.env.EXTRACTION_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
   try {
@@ -64,15 +36,28 @@ export async function processDocument(
     const fileBytesResult = await filesService.getFileContentBytes(document.fileId);
     if (!fileBytesResult.success) {
       log.error({ fileId: document.fileId }, "Could not fetch document file content from storage");
-      await documentsService.updateStatus(documentId, "failed");
-      await db.insert(extractions).values({
-        documentId,
-        status: "failed",
-        errorMessage: fileBytesResult.error.message,
-      });
+
+      const structuredError: DocumentErrorDetails = {
+        errorType: "file_read_error",
+        message: "Could not read document file from storage. Please verify that the uploaded file exists and is accessible.",
+        cause: fileBytesResult.error.message,
+        timestamp: new Date().toISOString(),
+      };
+
+      const [failedDoc] = await db
+        .update(documents)
+        .set({
+          status: "failed",
+          errorDetails: structuredError,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(documents.id, documentId))
+        .returning();
+
       return fail(
         ServiceErrorCode.FILE_OPERATION_FAILED,
-        fileBytesResult.error.message
+        fileBytesResult.error.message,
+        failedDoc
       );
     }
 
@@ -89,77 +74,77 @@ export async function processDocument(
 
     if (!extractionResult.success) {
       log.error({ err: extractionResult.error, documentId }, "Document extraction failed");
-      await documentsService.updateStatus(documentId, "failed");
-      await db.insert(extractions).values({
-        documentId,
-        status: "failed",
-        errorMessage: extractionResult.error.message,
-      });
+
+      // Check if this failure represents a domain/validation issue (e.g. Jurisdiction Mismatch, unreadable file)
+      const isDomainError =
+        extractionResult.error.code === ServiceErrorCode.VALIDATION_FAILED ||
+        extractionResult.error.message.startsWith("Jurisdiction Mismatch");
+
+      const userFacingMessage = isDomainError
+        ? extractionResult.error.message
+        : "Document digitization could not be completed for this file. Please ensure the scan is clear and try again.";
+
+      const structuredError: DocumentErrorDetails = {
+        errorType: isDomainError ? "validation_error" : "extraction_failed",
+        message: userFacingMessage,
+        timestamp: new Date().toISOString(),
+      };
+
+      await db
+        .update(documents)
+        .set({
+          status: "failed",
+          errorDetails: structuredError,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(documents.id, documentId));
+
       return extractionResult;
     }
 
     const { data: structuredData } = extractionResult.data;
 
-    // 5. Execute atomic database transaction
-    const [savedExtraction] = await db.transaction(async (tx) => {
-      // Insert extraction record with structured land record fields directly
-      const [newExtraction] = await tx
-        .insert(extractions)
-        .values({
-          documentId,
-          status: "completed",
-          confidenceScore: Math.round(structuredData.overallConfidence),
-          documentClassification: structuredData.documentClassification,
-          location: structuredData.location,
-          parcelIdentifiers: structuredData.parcelIdentifiers,
-          owners: structuredData.owners,
-          extent: structuredData.extent,
-          mutationInformation: structuredData.mutationInformation,
-          registrationInformation: structuredData.registrationInformation,
-          liabilities: structuredData.liabilities,
-          remarks: structuredData.remarks,
-        })
-        .returning();
+    // 5. Update document directly with raw extracted JSON and confidence score
+    const [updatedDoc] = await db
+      .update(documents)
+      .set({
+        status: "extracted",
+        documentType: structuredData.documentClassification.documentType || document.documentType,
+        state: structuredData.documentClassification.state || document.state,
+        extractedData: structuredData,
+        confidenceScore: Math.round(structuredData.overallConfidence),
+        errorDetails: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(documents.id, documentId))
+      .returning();
 
-      if (!newExtraction) {
-        throw new Error("Failed to insert extraction row inside transaction");
-      }
-
-      // Update document status to extracted and sync detected metadata
-      await tx
-        .update(documents)
-        .set({
-          status: "extracted",
-          documentType: structuredData.documentClassification.documentType || document.documentType,
-          state: structuredData.documentClassification.state || document.state,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(documents.id, documentId));
-
-      return [newExtraction];
-    });
-
-    return ok(savedExtraction);
+    return ok(updatedDoc);
   } catch (error) {
     log.error({ err: error, documentId }, "Document processing error");
 
-    const technicalErrorMessage = error instanceof Error ? error.message : String(error);
+    const structuredError: DocumentErrorDetails = {
+      errorType: "unknown_error",
+      message: "An unexpected error occurred while processing the document. Please try again or upload a clearer scan.",
+      timestamp: new Date().toISOString(),
+    };
 
     try {
-      await documentsService.updateStatus(documentId, "failed");
-
-      await db.insert(extractions).values({
-        documentId,
-        status: "failed",
-        errorMessage: technicalErrorMessage,
-      });
+      await db
+        .update(documents)
+        .set({
+          status: "failed",
+          errorDetails: structuredError,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(documents.id, documentId));
     } catch (cleanupError) {
       log.error({ cleanupError }, "Failed to update failure state for document");
     }
 
     return fail(
       ServiceErrorCode.AI_SERVICE_ERROR,
-      technicalErrorMessage,
+      "An unexpected error occurred while processing the document.",
       error
     );
   }

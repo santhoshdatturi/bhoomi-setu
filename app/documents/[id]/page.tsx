@@ -4,7 +4,6 @@ import { redirect, notFound } from "next/navigation";
 import { DocumentWorkspace } from "@/components/documents/document-workspace";
 import * as documentsService from "@/lib/services/documents.service";
 import * as filesService from "@/lib/services/files.service";
-import * as extractionsService from "@/lib/services/extractions.service";
 
 interface DocumentPageProps {
   params: Promise<{ id: string }>;
@@ -54,17 +53,9 @@ export default async function DocumentDetailPage({ params }: DocumentPageProps) 
     // S3 or presigned URL gracefully handled
   }
 
-  // 3. Fetch latest extraction result (if any)
-  let latestExtraction = null;
-  const extractionResult = await extractionsService.getLatestByDocumentId(id);
-  if (extractionResult.success) {
-    latestExtraction = extractionResult.data;
-  }
-
   return (
     <DocumentWorkspace
       initialDocument={document}
-      initialExtraction={latestExtraction}
       initialDownloadUrl={downloadUrl}
     />
   );

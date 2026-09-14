@@ -12,21 +12,18 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DocumentViewer } from "./document-viewer";
 import { ExtractionPanel } from "./extraction-panel";
-import type { DocumentRecord, ExtractionRecord } from "@/lib/db/types";
+import type { DocumentRecord } from "@/lib/db/types";
 
 interface DocumentWorkspaceProps {
   initialDocument: DocumentRecord;
-  initialExtraction: ExtractionRecord | null;
   initialDownloadUrl?: string | null;
 }
 
 export function DocumentWorkspace({
   initialDocument,
-  initialExtraction,
   initialDownloadUrl,
 }: DocumentWorkspaceProps) {
   const [document, setDocument] = useState<DocumentRecord>(initialDocument);
-  const [extraction, setExtraction] = useState<ExtractionRecord | null>(initialExtraction);
   const [downloadUrl, setDownloadUrl] = useState(initialDownloadUrl);
 
   const fetchDocumentDetails = useCallback(async () => {
@@ -36,7 +33,6 @@ export function DocumentWorkspace({
         const json = await res.json();
         if (json.success && json.data) {
           setDocument(json.data.document);
-          setExtraction(json.data.extraction);
           if (json.data.downloadUrl) {
             setDownloadUrl(json.data.downloadUrl);
           }
@@ -82,6 +78,13 @@ export function DocumentWorkspace({
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-sans font-medium border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
             <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
             <span>Extracted</span>
+          </span>
+        );
+      case "committed":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-sans font-medium border border-emerald-600/30 bg-emerald-600/15 text-emerald-800 dark:text-emerald-300">
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
+            <span>Committed</span>
           </span>
         );
       case "failed":
@@ -142,7 +145,6 @@ export function DocumentWorkspace({
         <div className="h-full min-h-0 flex flex-col overflow-hidden">
           <ExtractionPanel
             document={document}
-            extraction={extraction}
             onRefresh={fetchDocumentDetails}
           />
         </div>

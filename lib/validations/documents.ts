@@ -3,12 +3,28 @@ import { documents } from "@/lib/db/schema/documents";
 import { documentTypeEnum, documentStatusEnum } from "@/lib/db/schema/enums";
 import { z } from "zod";
 
+export const documentErrorTypeSchema = z.enum([
+  "file_read_error",
+  "extraction_failed",
+  "validation_error",
+  "commit_failed",
+  "unknown_error",
+]);
+
+export const documentErrorDetailsSchema = z.object({
+  errorType: documentErrorTypeSchema,
+  message: z.string(),
+  cause: z.string().optional(),
+  timestamp: z.string().optional(),
+});
+
 export const insertDocumentSchema = createInsertSchema(documents, {
-  fileId: z.string().uuid("Invalid File ID"),
+  fileId: z.uuid("Invalid File ID"),
   title: z.string().min(1, "Title is required").max(255),
   fileName: z.string().min(1, "File name is required"),
   state: z.string().max(100).optional().nullable(),
   uploadedBy: z.string().min(1, "Uploader ID is required"),
+  errorDetails: documentErrorDetailsSchema.optional().nullable(),
 }).omit({
   id: true,
   createdAt: true,
@@ -25,6 +41,9 @@ export const documentFilterSchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
+export type DocumentErrorType = z.infer<typeof documentErrorTypeSchema>;
+export type DocumentErrorDetails = z.infer<typeof documentErrorDetailsSchema>;
 export type InsertDocumentInput = z.infer<typeof insertDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 export type DocumentFilterInput = z.infer<typeof documentFilterSchema>;
+

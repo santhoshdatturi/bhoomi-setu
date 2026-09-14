@@ -142,13 +142,18 @@ export function toApiResponse<T>(
     return NextResponse.json({ success: true, data: result.data }, { status: successStatus });
   }
 
+  const isDomainError =
+    result.error.code === ServiceErrorCode.VALIDATION_FAILED ||
+    result.error.code === ServiceErrorCode.NOT_FOUND ||
+    result.error.code === ServiceErrorCode.CONFLICT;
+
   return NextResponse.json(
     {
       success: false,
       error: {
         code: result.error.code,
-        message: result.error.userMessage,
-        details: result.error.message !== result.error.userMessage ? result.error.message : undefined,
+        message: isDomainError && result.error.message ? result.error.message : result.error.userMessage,
+        details: isDomainError && result.error.message !== result.error.userMessage ? result.error.message : undefined,
       },
     },
     { status: result.error.statusCode }

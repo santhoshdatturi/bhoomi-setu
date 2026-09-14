@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import * as documentsService from "@/lib/services/documents.service";
 import * as filesService from "@/lib/services/files.service";
-import * as extractionsService from "@/lib/services/extractions.service";
 import { updateDocumentSchema } from "@/lib/validations/documents";
 import { toApiResponse, fail, ok, ServiceErrorCode } from "@/lib/services/errors";
 
@@ -38,19 +37,11 @@ export async function GET(
     // Gracefully handle local/mock environments without S3 credentials
   }
 
-  // 3. Fetch latest extraction result (if any)
-  let latestExtraction = null;
-  const extractionResult = await extractionsService.getLatestByDocumentId(id);
-  if (extractionResult.success) {
-    latestExtraction = extractionResult.data;
-  }
-
   return toApiResponse(
     ok({
       document,
       file: fileRecord,
       downloadUrl,
-      extraction: latestExtraction,
     })
   );
 }

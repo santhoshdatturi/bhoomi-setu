@@ -33,13 +33,6 @@ export const documentStatusEnum = pgEnum("document_status", [
   "uploaded",
   "processing",
   "extracted",
+  "committed",
   "failed",
-]);
-
-export const extractionStatusEnum = pgEnum("extraction_status", [
-  "pending",
-  "processing",
-  "completed",
-  "failed",
-  "review_required",
 ]);

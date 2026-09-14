@@ -1,7 +1,6 @@
 import type {
   files,
   documents,
-  extractions,
   users,
   sessions,
   accounts,
@@ -21,7 +20,6 @@ import { userRoleEnum, stateEnum } from "./schema/enums";
 export type UserRecord = typeof users.$inferSelect;
 export type FileRecord = typeof files.$inferSelect;
 export type DocumentRecord = typeof documents.$inferSelect;
-export type ExtractionRecord = typeof extractions.$inferSelect;
 
 export type AuthUserRecord = typeof users.$inferSelect;
 export type AuthSessionRecord = typeof sessions.$inferSelect;
@@ -55,5 +53,5 @@ export type UserRole = (typeof userRoleEnum.enumValues)[number];
 export type State = (typeof stateEnum.enumValues)[number];
 export type DocumentType = typeof documents.$inferInsert["documentType"];
 export type DocumentStatus = typeof documents.$inferInsert["status"];
-export type ExtractionStatus = typeof extractions.$inferInsert["status"];
+
 

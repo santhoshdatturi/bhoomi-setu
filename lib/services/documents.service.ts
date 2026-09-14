@@ -14,6 +14,29 @@ import {
   type DocumentFilterInput,
 } from "@/lib/validations/documents";
 import { markFileLinked } from "@/lib/services/files.service";
+import {
+  parcels,
+  ownerships,
+  cultivations,
+  mutations,
+  accountHoldings,
+  encumbrances,
+  spatialMaps,
+  propertyCards,
+} from "@/lib/db/schema/canonical";
+import {
+  insertParcelSchema,
+  insertOwnershipSchema,
+  insertCultivationSchema,
+  insertMutationSchema,
+  insertAccountHoldingSchema,
+  insertEncumbranceSchema,
+  insertSpatialMapSchema,
+  insertPropertyCardSchema,
+} from "@/lib/validations/canonical";
+import { stateEnum } from "@/lib/db/schema/enums";
+import type { StructuredLandRecordExtraction } from "@/lib/validations/extractions";
+
 
 export interface PaginatedDocumentsResult {
   documents: DocumentRecord[];
@@ -261,3 +284,245 @@ export async function remove(id: string): Promise<ServiceResult<void>> {
     );
   }
 }
+
+export async function commitToCanonicalDb(
+  documentId: string,
+  verifiedRecord?: unknown
+): Promise<ServiceResult<{ committed: boolean; targetTable: string; recordId: string }>> {
+  try {
+    const docResult = await get(documentId);
+    if (!docResult.success) return docResult;
+
+    const doc = docResult.data;
+    if (doc.status !== "extracted" && doc.status !== "committed") {
+      return fail(
+        ServiceErrorCode.VALIDATION_FAILED,
+        `Document status must be 'extracted' to commit. Current status: ${doc.status}`
+      );
+    }
+
+    const payload = (verifiedRecord || doc.extractedData) as Record<string, unknown> | null;
+    if (!payload) {
+      return fail(
+        ServiceErrorCode.VALIDATION_FAILED,
+        "No extracted data found to commit to database"
+      );
+    }
+
+    let insertedRecordId = "";
+
+    await db.transaction(async (tx) => {
+      switch (doc.documentType) {
+        case "parcel": {
+          const structuredPayload = payload as unknown as StructuredLandRecordExtraction;
+          const recordsList = structuredPayload.records && structuredPayload.records.length > 0 ? structuredPayload.records : [];
+          if (recordsList.length > 0) {
+            const locState = (doc.state || structuredPayload.location?.state?.value || "Andhra Pradesh") as typeof stateEnum.enumValues[number];
+            const validState = stateEnum.enumValues.includes(locState) ? locState : stateEnum.enumValues[0];
+            const dist = structuredPayload.location?.district?.value || "Unknown District";
+            const subDist = structuredPayload.location?.taluk?.value || null;
+            const vill = structuredPayload.location?.village?.value || "Unknown Village";
+
+            for (const rec of recordsList) {
+              const pId = rec.plotNumber || rec.surveyNumber || "Plot-1";
+              const subDiv = rec.subDivision || null;
+              const parsedArea = parseFloat(rec.area);
+              const areaVal = !isNaN(parsedArea) ? parsedArea.toFixed(2) : "1.00";
+              const areaUnitVal = rec.areaUnit || "Hectares";
+              const classVal = rec.landClassification || null;
+
+              const [inserted] = await tx
+                .insert(parcels)
+                .values({
+                  state: validState,
+                  district: dist,
+                  subDistrict: subDist,
+                  village: vill,
+                  parcelIdType: "Survey/Plot",
+                  parcelId: pId,
+                  subdivision: subDiv,
+                  area: areaVal,
+                  areaUnit: areaUnitVal,
+                  landClassification: classVal,
+                })
+                .returning();
+
+              if (!insertedRecordId) insertedRecordId = inserted.id;
+            }
+          } else {
+            const parseResult = insertParcelSchema.safeParse(payload);
+            if (!parseResult.success) {
+              throw new Error(`Parcel validation error: ${parseResult.error.message}`);
+            }
+            const [inserted] = await tx.insert(parcels).values(parseResult.data).returning();
+            insertedRecordId = inserted.id;
+          }
+          break;
+        }
+        case "ownership": {
+          const structuredPayload = payload as unknown as StructuredLandRecordExtraction;
+          const recordsList = structuredPayload.records && structuredPayload.records.length > 0
+            ? structuredPayload.records
+            : structuredPayload.owners && structuredPayload.owners.length > 0
+            ? structuredPayload.owners.map((o) => ({
+                surveyNumber: o.surveyNumber || structuredPayload.parcelIdentifiers?.surveyNumber?.value || "",
+                subDivision: o.subDivision || structuredPayload.parcelIdentifiers?.subDivision?.value || "",
+                plotNumber: structuredPayload.parcelIdentifiers?.plotNumber?.value || "",
+                khataNumber: o.khataNumber || structuredPayload.parcelIdentifiers?.khataNumber?.value || "",
+                ownerName: o.name,
+                relativeName: o.relativeName,
+                relationshipType: o.relationshipType,
+                address: "",
+                area: structuredPayload.extent?.totalArea?.value || "",
+                areaUnit: structuredPayload.extent?.areaUnit?.value || "Ha",
+                natureOfPossession: o.ownershipType || "",
+                landClassification: structuredPayload.extent?.landClassification?.value || "",
+                remarksOrEncumbrances: "",
+                share: o.share,
+                confidence: o.confidence,
+                evidence: o.evidence,
+              }))
+            : [];
+
+          if (recordsList.length > 0) {
+            const locState = (doc.state || structuredPayload.location?.state?.value || "Andhra Pradesh") as typeof stateEnum.enumValues[number];
+            const validState = stateEnum.enumValues.includes(locState) ? locState : stateEnum.enumValues[0];
+            const dist = structuredPayload.location?.district?.value || "Unknown District";
+            const subDist = structuredPayload.location?.taluk?.value || null;
+            const vill = structuredPayload.location?.village?.value || "Unknown Village";
+
+            for (const rec of recordsList) {
+              const pId = rec.plotNumber || rec.surveyNumber || "Plot-1";
+              const subDiv = rec.subDivision || null;
+              const parsedArea = parseFloat(rec.area);
+              const areaVal = !isNaN(parsedArea) ? parsedArea.toFixed(2) : "1.00";
+              const areaUnitVal = rec.areaUnit || "Hectares";
+              const classVal = rec.landClassification || null;
+
+              // Insert parcel for this record
+              const [insertedParcel] = await tx
+                .insert(parcels)
+                .values({
+                  state: validState,
+                  district: dist,
+                  subDistrict: subDist,
+                  village: vill,
+                  parcelIdType: "Survey/Plot",
+                  parcelId: pId,
+                  subdivision: subDiv,
+                  area: areaVal,
+                  areaUnit: areaUnitVal,
+                  landClassification: classVal,
+                })
+                .returning();
+
+              const parsedShare = parseFloat(rec.share);
+              // Insert ownership linked to the parcel
+              const [insertedOwnership] = await tx
+                .insert(ownerships)
+                .values({
+                  parcelId: insertedParcel.id,
+                  ownerName: rec.ownerName || "Unknown Owner",
+                  ownerRelation: rec.relativeName || null,
+                  ownershipShare: !isNaN(parsedShare) ? parsedShare.toFixed(2) : null,
+                  khataNumber: rec.khataNumber || structuredPayload.parcelIdentifiers?.khataNumber?.value || null,
+                  rights: rec.natureOfPossession || rec.remarksOrEncumbrances || null,
+                })
+                .returning();
+
+              if (!insertedRecordId) {
+                insertedRecordId = insertedOwnership.id;
+              }
+            }
+          } else {
+            const parseResult = insertOwnershipSchema.safeParse(payload);
+            if (!parseResult.success) {
+              throw new Error(`Ownership validation error: ${parseResult.error.message}`);
+            }
+            const [inserted] = await tx.insert(ownerships).values(parseResult.data).returning();
+            insertedRecordId = inserted.id;
+          }
+          break;
+        }
+        case "cultivation": {
+          const parseResult = insertCultivationSchema.safeParse(payload);
+          if (!parseResult.success) {
+            throw new Error(`Cultivation validation error: ${parseResult.error.message}`);
+          }
+          const [inserted] = await tx.insert(cultivations).values(parseResult.data).returning();
+          insertedRecordId = inserted.id;
+          break;
+        }
+        case "mutation": {
+          const parseResult = insertMutationSchema.safeParse(payload);
+          if (!parseResult.success) {
+            throw new Error(`Mutation validation error: ${parseResult.error.message}`);
+          }
+          const [inserted] = await tx.insert(mutations).values(parseResult.data).returning();
+          insertedRecordId = inserted.id;
+          break;
+        }
+        case "account_holding": {
+          const parseResult = insertAccountHoldingSchema.safeParse(payload);
+          if (!parseResult.success) {
+            throw new Error(`Account holding validation error: ${parseResult.error.message}`);
+          }
+          const [inserted] = await tx.insert(accountHoldings).values(parseResult.data).returning();
+          insertedRecordId = inserted.id;
+          break;
+        }
+        case "encumbrance": {
+          const parseResult = insertEncumbranceSchema.safeParse(payload);
+          if (!parseResult.success) {
+            throw new Error(`Encumbrance validation error: ${parseResult.error.message}`);
+          }
+          const [inserted] = await tx.insert(encumbrances).values(parseResult.data).returning();
+          insertedRecordId = inserted.id;
+          break;
+        }
+        case "spatial_map": {
+          const parseResult = insertSpatialMapSchema.safeParse(payload);
+          if (!parseResult.success) {
+            throw new Error(`Spatial map validation error: ${parseResult.error.message}`);
+          }
+          const [inserted] = await tx.insert(spatialMaps).values(parseResult.data).returning();
+          insertedRecordId = inserted.id;
+          break;
+        }
+        case "property_card": {
+          const parseResult = insertPropertyCardSchema.safeParse(payload);
+          if (!parseResult.success) {
+            throw new Error(`Property card validation error: ${parseResult.error.message}`);
+          }
+          const [inserted] = await tx.insert(propertyCards).values(parseResult.data).returning();
+          insertedRecordId = inserted.id;
+          break;
+        }
+        default:
+          throw new Error(`Unsupported document type for commit: ${doc.documentType}`);
+      }
+
+      await tx
+        .update(documents)
+        .set({
+          status: "committed",
+          committedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(documents.id, documentId));
+    });
+
+    return ok({
+      committed: true,
+      targetTable: doc.documentType,
+      recordId: insertedRecordId,
+    });
+  } catch (error) {
+    return fail(
+      ServiceErrorCode.DB_ERROR,
+      error instanceof Error ? error.message : "Failed to commit canonical record to database",
+      error
+    );
+  }
+}
+
