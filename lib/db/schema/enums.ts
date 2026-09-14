@@ -1,4 +1,7 @@
 import { pgEnum } from "drizzle-orm/pg-core";
+import { INDIAN_STATES } from "@/lib/constants/states";
+
+export const stateEnum = pgEnum("state", INDIAN_STATES);
 
 export const fileBucketEnum = pgEnum("file_bucket", [
   "app",
@@ -16,15 +19,14 @@ export const userRoleEnum = pgEnum("user_role", [
 ]);
 
 export const documentTypeEnum = pgEnum("document_type", [
-  "rtc",
-  "khata",
+  "parcel",
+  "ownership",
+  "cultivation",
   "mutation",
-  "sale_deed",
-  "patta",
-  "land_tax_receipt",
-  "survey_map",
-  "other",
-  "unknown",
+  "account_holding",
+  "encumbrance",
+  "spatial_map",
+  "property_card",
 ]);
 
 export const documentStatusEnum = pgEnum("document_status", [

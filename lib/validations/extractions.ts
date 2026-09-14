@@ -13,7 +13,7 @@ export const fieldWithEvidenceSchema = <T extends z.ZodTypeAny>(valueSchema: T) 
   });
 
 export const documentClassificationExtractionSchema = z.object({
-  documentType: z.enum(documentTypeEnum.enumValues).default("unknown"),
+  documentType: z.enum(documentTypeEnum.enumValues),
   state: z.string().nullable().default(null),
   detectedLanguage: z.string().nullable().default(null),
   documentTitle: z.string().nullable().default(null),

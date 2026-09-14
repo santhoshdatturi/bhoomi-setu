@@ -12,7 +12,7 @@ export const documents = pgTable(
       .notNull(),
     title: text("title").notNull(),
     fileName: text("file_name").notNull(),
-    documentType: documentTypeEnum("document_type").default("unknown").notNull(),
+    documentType: documentTypeEnum("document_type").notNull(),
     status: documentStatusEnum("status").default("uploaded").notNull(),
     state: text("state"),
     uploadedBy: text("uploaded_by").notNull(),

@@ -24,12 +24,14 @@ import { cn } from "@/lib/utils";
 import { INDIAN_STATES } from "@/lib/constants/states";
 
 const DOCUMENT_TYPES = [
-  { value: "ror", label: "RoR / RTC / Pahani", desc: "Record of Rights & Tenancy" },
-  { value: "7_12", label: "7/12 Extract", desc: "Saat Baara / Saat-Baara Utra" },
-  { value: "mutation", label: "Mutation Register", desc: "Pouthe Khata / Ferfar" },
-  { value: "sale_deed", label: "Sale Deed", desc: "Registered Title Deed" },
-  { value: "patta", label: "Patta / Chitta", desc: "Land ownership certificate" },
-  { value: "other", label: "Other Record", desc: "Cadastral / revenue map / other" },
+  { value: "parcel", label: "Parcel (Cadastral / 7/12)", desc: "Survey parcel and village record" },
+  { value: "ownership", label: "Ownership (RoR / 1-B / Jamabandi)", desc: "Record of Rights & Pattadar details" },
+  { value: "cultivation", label: "Cultivation (Adangal / Pahani)", desc: "Crop, tenancy & cultivator record" },
+  { value: "mutation", label: "Mutation (Ferfar / Dakhil Kharij)", desc: "Title transfer and order history" },
+  { value: "account_holding", label: "Account / Holding (Khata / 8A)", desc: "Consolidated holding & tax record" },
+  { value: "encumbrance", label: "Encumbrance Certificate (EC)", desc: "Mortgages, liens & charges" },
+  { value: "spatial_map", label: "Spatial Map (FMB / Cadastral)", desc: "Field measurement & boundary map" },
+  { value: "property_card", label: "Property Card (Urban CTS)", desc: "City title and municipal card" },
 ];
 
 interface DocumentUploadModalProps {
@@ -42,7 +44,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [documentType, setDocumentType] = useState<string>("ror");
+  const [documentType, setDocumentType] = useState<string>("");
   const [stateName, setStateName] = useState("Karnataka");
   const [autoProcess, setAutoProcess] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -74,6 +76,10 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
     }
     if (!title.trim()) {
       toast.error("Please enter a document title");
+      return;
+    }
+    if (!documentType) {
+      toast.error("Please select a document type");
       return;
     }
 
@@ -144,7 +150,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
   const resetForm = () => {
     setFile(null);
     setTitle("");
-    setDocumentType("ror");
+    setDocumentType("");
     setStateName("Karnataka");
   };
 
