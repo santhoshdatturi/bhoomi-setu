@@ -28,17 +28,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { INDIAN_STATES } from "@/lib/constants/states";
-
-const DOCUMENT_TYPES = [
-  { value: "parcel", label: "Parcel (Cadastral / Survey Parcel)" },
-  { value: "ownership", label: "Ownership (Record of Rights / RoR)" },
-  { value: "cultivation", label: "Cultivation (Pahani / Adangal)" },
-  { value: "mutation", label: "Mutation (Ferfar / Transfer Record)" },
-  { value: "account_holding", label: "Account / Holding (Khata / 8A)" },
-  { value: "encumbrance", label: "Encumbrance Certificate (EC)" },
-  { value: "spatial_map", label: "Spatial Map (FMB / Cadastral Map)" },
-  { value: "property_card", label: "Property Card (Urban Title / CTS)" },
-];
+import { DOCUMENT_TYPES } from "@/lib/constants/documents";
 
 interface DocumentUploadModalProps {
   onSuccess?: () => void;
@@ -52,9 +42,6 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
   const [title, setTitle] = useState("");
   const [documentType, setDocumentType] = useState<string>("");
   const [stateName, setStateName] = useState<string>("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<string>("");
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (selectedFile: File) => {
@@ -91,10 +78,10 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
       return;
     }
 
-    setIsUploading(true);
-    setUploadProgress("Uploading document file...");
+    // Close modal immediately and hand off upload to promise-based toast
+    setOpen(false);
 
-    try {
+    const uploadPromise = (async () => {
       // 1. Upload file to server endpoint
       const formData = new FormData();
       formData.append("file", file);
@@ -111,8 +98,7 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
 
       const { fileId } = uploadJson.data;
 
-      // 2. Register document in database
-      setUploadProgress("Registering document record...");
+      // 2. Register document in database (status default 'uploaded')
       const docRes = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,26 +117,17 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
       }
 
       const newDoc = docJson.data;
-
-      // 3. Always trigger extraction pipeline immediately on upload
-      setUploadProgress("Initiating document digitization pipeline...");
-      fetch(`/api/documents/${newDoc.id}/process`, {
-        method: "POST",
-      }).catch(() => {
-        // background process
-      });
-
-      toast.success("Document uploaded! Extraction started automatically.");
-      setOpen(false);
       resetForm();
       onSuccess?.();
       router.push(`/documents/${newDoc.id}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setIsUploading(false);
-      setUploadProgress("");
-    }
+      return newDoc;
+    })();
+
+    toast.promise(uploadPromise, {
+      loading: `Uploading "${title.trim()}"...`,
+      success: () => `Document uploaded successfully! Redirecting to workspace...`,
+      error: (err) => err instanceof Error ? err.message : "Upload failed",
+    });
   };
 
   const resetForm = () => {
@@ -283,14 +260,6 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
             </Select>
           </div>
 
-          {/* Progress / Status indicator */}
-          {uploadProgress && (
-            <div className="text-[11px] font-mono text-muted-foreground flex items-center gap-2 bg-muted/40 p-2 rounded">
-              <span className="size-2 rounded-full bg-primary animate-ping" />
-              <span>{uploadProgress}</span>
-            </div>
-          )}
-
           {/* Submit Buttons */}
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button
@@ -298,18 +267,17 @@ export function DocumentUploadModal({ onSuccess, trigger }: DocumentUploadModalP
               variant="outline"
               size="sm"
               onClick={() => setOpen(false)}
-              disabled={isUploading}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               size="sm"
-              disabled={isUploading || !file}
+              disabled={!file}
               className="gap-1.5 font-mono text-xs"
             >
               <HugeiconsIcon icon={Upload01Icon} className="size-3.5" />
-              <span>{isUploading ? "Uploading..." : "Upload & Digitize"}</span>
+              <span>Upload Document</span>
             </Button>
           </div>
         </form>

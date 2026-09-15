@@ -10,6 +10,16 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { INDIAN_STATES } from "@/lib/constants/states";
+import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from "@/lib/constants/documents";
 import { FieldConfidenceBadge } from "./field-confidence-badge";
 import {
   OwnershipView,
@@ -37,19 +47,43 @@ export function ExtractionPanel({
 }: ExtractionPanelProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isSavingMeta, setIsSavingMeta] = useState(false);
+
+  const [selectedState, setSelectedState] = useState<string>(document.state || "");
+  const [selectedDocType, setSelectedDocType] = useState<string>(document.documentType || "ownership");
 
   const status = document.status;
   const errorDetails = document.errorDetails as DocumentErrorDetails | null;
 
   // Use document.extractedData as primary source
   const extractedObj = (document.extractedData as StructuredLandRecordExtraction | null) || null;
-
-  const classification = extractedObj?.documentClassification;
   const confidenceScore = document.confidenceScore;
 
-  const handleProcess = async () => {
+  const handleSaveMetadataAndProcess = async () => {
     setIsProcessing(true);
     try {
+      // 1. Update metadata if changed
+      if (selectedState !== document.state || selectedDocType !== document.documentType) {
+        setIsSavingMeta(true);
+        const updateRes = await fetch(`/api/documents/${document.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            state: selectedState || null,
+            documentType: selectedDocType,
+          }),
+        });
+        const updateJson = await updateRes.json();
+        setIsSavingMeta(false);
+
+        if (!updateRes.ok || !updateJson.success) {
+          toast.error(updateJson.error?.userMessage || "Failed to update document settings");
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // 2. Trigger process endpoint
       const res = await fetch(`/api/documents/${document.id}/process`, {
         method: "POST",
       });
@@ -66,6 +100,7 @@ export function ExtractionPanel({
       toast.error("An error occurred during document processing");
     } finally {
       setIsProcessing(false);
+      setIsSavingMeta(false);
     }
   };
 
@@ -78,46 +113,59 @@ export function ExtractionPanel({
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        toast.error(json.error?.userMessage || "Failed to commit record to canonical database.");
+        toast.error(
+          json.error?.userMessage || "Unable to save record to registry. Please check the extracted fields and retry."
+        );
       } else {
-        toast.success("Record committed to canonical database successfully!");
+        toast.success("Land record verified and saved to official registry!");
         onRefresh?.();
       }
     } catch {
-      toast.error("An error occurred while committing record");
+      toast.error("An error occurred while saving record to registry");
     } finally {
       setIsCommitting(false);
     }
   };
 
+  const docTypeLabel =
+    DOCUMENT_TYPES.find((t) => t.value === document.documentType)?.shortLabel ||
+    DOCUMENT_TYPE_LABELS[document.documentType] ||
+    document.documentType;
+
   return (
     <div className="flex flex-col h-full rounded-lg border border-border bg-card shadow-xs overflow-hidden">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-border bg-muted/40 shrink-0">
-        <div className="flex items-center gap-2">
-          <HugeiconsIcon icon={Layers01Icon} className="size-4 text-primary" />
-          <h2 className="text-xs font-semibold tracking-tight text-foreground font-sans">
-            Extracted Land Record
+      {/* Streamlined Header Bar */}
+      <div className="h-11 px-3.5 border-b border-border bg-muted/40 shrink-0 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <HugeiconsIcon icon={Layers01Icon} className="size-4 shrink-0 text-primary" />
+          <h2 className="text-xs font-semibold tracking-tight text-foreground font-sans truncate">
+            {docTypeLabel}
           </h2>
-          <span className="text-[10px] font-sans font-medium px-2 py-0.5 rounded-full border border-primary/20 bg-primary/10 text-primary uppercase">
-            {status === "committed" ? "Canonical DB Record" : "Digitized Draft"}
-          </span>
+          {confidenceScore !== null && confidenceScore !== undefined && status === "extracted" && (
+            <FieldConfidenceBadge confidence={confidenceScore} />
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           {(status === "extracted" || status === "failed") && (
             <Button
               variant="outline"
               size="xs"
-              onClick={handleProcess}
-              disabled={isProcessing || isCommitting}
-              className="gap-1 font-sans text-xs h-7 px-2"
+              onClick={handleSaveMetadataAndProcess}
+              disabled={isProcessing || isCommitting || isSavingMeta}
+              className="min-w-[92px] justify-center font-sans text-xs h-7 px-2.5 transition-all"
             >
-              <HugeiconsIcon
-                icon={ReloadIcon}
-                className={`size-3 ${isProcessing ? "animate-spin" : ""}`}
-              />
-              <span>{isProcessing ? "Processing..." : "Reprocess"}</span>
+              {isProcessing ? (
+                <HugeiconsIcon
+                  icon={ReloadIcon}
+                  className="size-3.5 animate-spin"
+                />
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <HugeiconsIcon icon={ReloadIcon} className="size-3.5" />
+                  <span>Reprocess</span>
+                </span>
+              )}
             </Button>
           )}
 
@@ -126,20 +174,29 @@ export function ExtractionPanel({
               size="xs"
               onClick={handleCommit}
               disabled={isProcessing || isCommitting}
-              className="gap-1 font-sans text-xs h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="min-w-[124px] justify-center font-sans text-xs h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all"
             >
-              <HugeiconsIcon
-                icon={CheckmarkCircle02Icon}
-                className={`size-3 ${isCommitting ? "animate-spin" : ""}`}
-              />
-              <span>{isCommitting ? "Committing..." : "Approve & Commit"}</span>
+              {isCommitting ? (
+                <HugeiconsIcon
+                  icon={ReloadIcon}
+                  className="size-3.5 animate-spin"
+                />
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    className="size-3.5"
+                  />
+                  <span>Approve & Save</span>
+                </span>
+              )}
             </Button>
           )}
 
           {status === "committed" && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-sans font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
-              <span>Verified & Committed</span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-sans font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
+              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
+              <span>Verified & Registered</span>
             </span>
           )}
         </div>
@@ -149,23 +206,66 @@ export function ExtractionPanel({
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 font-sans">
         {/* State 1: Uploaded (Not yet processed) */}
         {status === "uploaded" && !isProcessing && (
-          <div className="flex flex-col items-center justify-center py-10 px-4 text-center space-y-3">
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center space-y-4 max-w-md mx-auto">
             <div className="size-11 rounded-full bg-primary/10 flex items-center justify-center text-primary">
               <HugeiconsIcon icon={File01Icon} className="size-5" />
             </div>
-            <div className="space-y-1 max-w-sm">
-              <h3 className="text-sm font-semibold text-foreground">Ready for Digitization</h3>
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground">Ready for AI Digitization</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Run automated document extraction to parse parcel boundaries, khatedars, extent, land revenue, and mutation history.
+                Review document jurisdiction and classification settings, then initiate AI extraction.
               </p>
             </div>
+
+            {/* Editable State & Document Type Controls */}
+            <div className="w-full text-left bg-muted/30 border border-border/80 rounded-lg p-3.5 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">State / Jurisdiction</Label>
+                <Select
+                  value={selectedState}
+                  onValueChange={(val) => setSelectedState(val as string)}
+                >
+                  <SelectTrigger className="w-full text-xs h-8 bg-card">
+                    <SelectValue placeholder="Select state..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDIAN_STATES.map((state) => (
+                      <SelectItem key={state} value={state} className="text-xs">
+                        {state}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">Document Classification</Label>
+                <Select
+                  value={selectedDocType}
+                  onValueChange={(val) => setSelectedDocType(val as string)}
+                  items={DOCUMENT_TYPES}
+                >
+                  <SelectTrigger className="w-full text-xs h-8 bg-card">
+                    <SelectValue placeholder="Select document type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value} className="text-xs">
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <Button
-              onClick={handleProcess}
-              disabled={isProcessing}
-              className="gap-2 font-sans text-xs mt-1"
+              onClick={handleSaveMetadataAndProcess}
+              disabled={isProcessing || isSavingMeta}
+              className="gap-2 font-sans text-xs w-full h-9"
             >
               <HugeiconsIcon icon={Layers01Icon} className="size-3.5" />
-              <span>Extract Land Record</span>
+              <span>Start Extraction</span>
             </Button>
           </div>
         )}
@@ -214,8 +314,6 @@ export function ExtractionPanel({
             str.includes("TypeError") ||
             str.includes("Bad Request");
 
-          // Determine user-facing message:
-          // If cause contains a domain validation message (like "Jurisdiction Mismatch: ..."), prioritize it over generic text
           let displayMessage = errorDetails?.message || "Document digitization could not be completed for this file.";
           if (
             errorDetails?.cause &&
@@ -231,7 +329,7 @@ export function ExtractionPanel({
             errorDetails?.errorType === "validation_error";
 
           return (
-            <div className="flex flex-col items-center justify-center py-10 px-4 text-center space-y-4">
+            <div className="flex flex-col items-center justify-center py-6 px-4 text-center space-y-4 max-w-md mx-auto">
               <div
                 className={`size-12 rounded-full flex items-center justify-center ${
                   isJurisdictionNotice
@@ -260,19 +358,62 @@ export function ExtractionPanel({
 
                   <p className="text-[11px] text-muted-foreground leading-normal">
                     {isJurisdictionNotice
-                      ? "Please verify that the document matches the selected state jurisdiction, or re-upload the document with the appropriate state selected."
-                      : "You can retry processing or upload a clearer scan of the document."}
+                      ? "Please adjust the document state jurisdiction or document classification type below, then click reprocess."
+                      : "You can adjust settings below and retry processing."}
                   </p>
+                </div>
+              </div>
+
+              {/* Editable Settings for Reprocessing */}
+              <div className="w-full text-left bg-muted/30 border border-border/80 rounded-lg p-3.5 space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">State / Jurisdiction</Label>
+                  <Select
+                    value={selectedState}
+                    onValueChange={(val) => setSelectedState(val as string)}
+                  >
+                    <SelectTrigger className="w-full text-xs h-8 bg-card">
+                      <SelectValue placeholder="Select state..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDIAN_STATES.map((state) => (
+                        <SelectItem key={state} value={state} className="text-xs">
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">Document Classification</Label>
+                  <Select
+                    value={selectedDocType}
+                    onValueChange={(val) => setSelectedDocType(val as string)}
+                    items={DOCUMENT_TYPES}
+                  >
+                    <SelectTrigger className="w-full text-xs h-8 bg-card">
+                      <SelectValue placeholder="Select document type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DOCUMENT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value} className="text-xs">
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               <Button
                 variant="outline"
-                onClick={handleProcess}
-                className="gap-2 font-sans text-xs"
+                onClick={handleSaveMetadataAndProcess}
+                disabled={isProcessing || isSavingMeta}
+                className="gap-2 font-sans text-xs w-full h-9"
               >
-                <HugeiconsIcon icon={ReloadIcon} className="size-3.5" />
-                <span>Retry Processing</span>
+                <HugeiconsIcon icon={ReloadIcon} className={`size-3.5 ${isProcessing ? "animate-spin" : ""}`} />
+                <span>{isProcessing ? "Reprocessing..." : "Save Settings & Reprocess"}</span>
               </Button>
             </div>
           );
@@ -281,35 +422,6 @@ export function ExtractionPanel({
         {/* State 4: Extracted or Committed Successfully */}
         {(status === "extracted" || status === "committed") && !isProcessing && (
           <div className="space-y-3">
-            {/* Top Overview Banner */}
-            <div className="rounded-md border border-border/80 bg-muted/30 p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-foreground">
-                  {classification?.documentTitle || "Record of Rights (RoR)"}
-                </span>
-                {classification?.state && classification.state !== "unknown" && (
-                  <span className="text-[11px] text-muted-foreground">
-                    • {classification.state}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {classification?.detectedLanguage && (
-                  <span className="text-[11px] text-muted-foreground">
-                    Language: {classification.detectedLanguage}
-                  </span>
-                )}
-                {confidenceScore !== null && confidenceScore !== undefined && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-muted-foreground">Overall Confidence:</span>
-                    <FieldConfidenceBadge
-                      confidence={confidenceScore}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Document-Type Specific View Component */}
             {(() => {
               switch (document.documentType) {
