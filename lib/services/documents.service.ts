@@ -490,12 +490,47 @@ export async function commitToCanonicalDb(
           break;
         }
         case "property_card": {
-          const parseResult = insertPropertyCardSchema.safeParse(payload);
-          if (!parseResult.success) {
-            throw new Error(`Property card validation error: ${parseResult.error.message}`);
+          const structuredPayload = payload as unknown as StructuredLandRecordExtraction;
+          if (structuredPayload.parcelIdentifiers || structuredPayload.owners) {
+            const pId =
+              structuredPayload.parcelIdentifiers?.plotNumber?.value ||
+              structuredPayload.parcelIdentifiers?.surveyNumber?.value ||
+              "CTS-1";
+            const owner = structuredPayload.owners?.[0];
+            const ownerNameVal = owner?.name || "Unknown Holder";
+            const ownerRel = owner?.relativeName
+              ? `${owner.relationshipType || "Relative"}: ${owner.relativeName}`
+              : null;
+            const usageVal = structuredPayload.extent?.landClassification?.value || "Residential";
+            const areaVal = structuredPayload.extent?.totalArea?.value || null;
+            const areaUnitVal = structuredPayload.extent?.areaUnit?.value || "Sq. Mtr";
+            const taxVal = structuredPayload.extent?.landRevenueTax?.value || null;
+            const remarksVal = structuredPayload.remarks && structuredPayload.remarks.length > 0
+              ? structuredPayload.remarks.join("; ")
+              : null;
+
+            const [inserted] = await tx
+              .insert(propertyCards)
+              .values({
+                propertyId: pId,
+                ownerName: ownerNameVal,
+                ownerRelation: ownerRel,
+                usage: usageVal,
+                area: areaVal,
+                areaUnit: areaUnitVal,
+                taxAssessment: taxVal,
+                remarks: remarksVal,
+              })
+              .returning();
+            insertedRecordId = inserted.id;
+          } else {
+            const parseResult = insertPropertyCardSchema.safeParse(payload);
+            if (!parseResult.success) {
+              throw new Error(`Property card validation error: ${parseResult.error.message}`);
+            }
+            const [inserted] = await tx.insert(propertyCards).values(parseResult.data).returning();
+            insertedRecordId = inserted.id;
           }
-          const [inserted] = await tx.insert(propertyCards).values(parseResult.data).returning();
-          insertedRecordId = inserted.id;
           break;
         }
         default:
@@ -506,6 +541,7 @@ export async function commitToCanonicalDb(
         .update(documents)
         .set({
           status: "committed",
+          extractedData: payload,
           committedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })

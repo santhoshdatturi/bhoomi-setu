@@ -7,25 +7,35 @@ import {
   Compass01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Input } from "@/components/ui/input";
 import { FieldConfidenceBadge } from "../field-confidence-badge";
 import { FieldEvidenceQuote } from "../field-evidence-quote";
 import type { StructuredLandRecordExtraction } from "@/lib/validations/extractions";
 
 interface ParcelViewProps {
   data: StructuredLandRecordExtraction | null;
+  isEditing?: boolean;
+  onChange?: (updated: StructuredLandRecordExtraction) => void;
 }
 
 function hasValue(field?: { value?: string | null; confidence?: number }) {
   return Boolean(field?.value && field.value.trim().length > 0 && (field.confidence ?? 0) > 0);
 }
 
-export function ParcelView({ data }: ParcelViewProps) {
+export function ParcelView({ data, isEditing = false, onChange }: ParcelViewProps) {
   if (!data) return null;
 
   const location = data.location;
   const parcel = data.parcelIdentifiers;
   const extent = data.extent;
   const records = data.records || [];
+
+  const handleUpdate = (updater: (prev: StructuredLandRecordExtraction) => StructuredLandRecordExtraction) => {
+    if (!onChange) return;
+    const clone: StructuredLandRecordExtraction = JSON.parse(JSON.stringify(data));
+    const next = updater(clone);
+    onChange(next);
+  };
 
   return (
     <div className="space-y-3 font-sans">
@@ -38,37 +48,119 @@ export function ParcelView({ data }: ParcelViewProps) {
           </div>
         </div>
         <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">State</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">{location?.state?.value || "—"}</span>
-              {location?.state && location.state.value && <FieldConfidenceBadge confidence={location.state.confidence} />}
-            </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">State</span>
+            {isEditing ? (
+              <Input
+                value={location?.state?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.location) prev.location = {};
+                    prev.location.state = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.location.state?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs bg-background"
+                placeholder="State"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">{location?.state?.value || "—"}</span>
+                {location?.state && location.state.value && <FieldConfidenceBadge confidence={location.state.confidence} />}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">District</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">{location?.district?.value || "—"}</span>
-              {location?.district && location.district.value && <FieldConfidenceBadge confidence={location.district.confidence} />}
-            </div>
-            {location?.district?.evidence && <FieldEvidenceQuote evidence={location.district.evidence} />}
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">District</span>
+            {isEditing ? (
+              <Input
+                value={location?.district?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.location) prev.location = {};
+                    prev.location.district = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.location.district?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs bg-background"
+                placeholder="District"
+              />
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground">{location?.district?.value || "—"}</span>
+                  {location?.district && location.district.value && <FieldConfidenceBadge confidence={location.district.confidence} />}
+                </div>
+                {location?.district?.evidence && <FieldEvidenceQuote evidence={location.district.evidence} />}
+              </>
+            )}
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Taluk / Sub-District</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">{location?.taluk?.value || "—"}</span>
-              {location?.taluk && location.taluk.value && <FieldConfidenceBadge confidence={location.taluk.confidence} />}
-            </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Taluk / Sub-District</span>
+            {isEditing ? (
+              <Input
+                value={location?.taluk?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.location) prev.location = {};
+                    prev.location.taluk = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.location.taluk?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs bg-background"
+                placeholder="Taluk"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">{location?.taluk?.value || "—"}</span>
+                {location?.taluk && location.taluk.value && <FieldConfidenceBadge confidence={location.taluk.confidence} />}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Village / Locality</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">{location?.village?.value || "—"}</span>
-              {location?.village && location.village.value && <FieldConfidenceBadge confidence={location.village.confidence} />}
-            </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Village / Locality</span>
+            {isEditing ? (
+              <Input
+                value={location?.village?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.location) prev.location = {};
+                    prev.location.village = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.location.village?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs bg-background"
+                placeholder="Village"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">{location?.village?.value || "—"}</span>
+                {location?.village && location.village.value && <FieldConfidenceBadge confidence={location.village.confidence} />}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -82,60 +174,119 @@ export function ParcelView({ data }: ParcelViewProps) {
           </div>
         </div>
         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Survey Number</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground font-mono">{parcel?.surveyNumber?.value || "—"}</span>
-              {parcel?.surveyNumber && parcel.surveyNumber.value && <FieldConfidenceBadge confidence={parcel.surveyNumber.confidence} />}
-            </div>
-            {parcel?.surveyNumber?.evidence && <FieldEvidenceQuote evidence={parcel.surveyNumber.evidence} />}
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Survey Number</span>
+            {isEditing ? (
+              <Input
+                value={parcel?.surveyNumber?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.parcelIdentifiers) prev.parcelIdentifiers = {};
+                    prev.parcelIdentifiers.surveyNumber = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.parcelIdentifiers.surveyNumber?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs font-mono bg-background"
+                placeholder="Survey No"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground font-mono">{parcel?.surveyNumber?.value || "—"}</span>
+                {parcel?.surveyNumber && parcel.surveyNumber.value && <FieldConfidenceBadge confidence={parcel.surveyNumber.confidence} />}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Sub-Division / Hissa</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground font-mono">{parcel?.subDivision?.value || "—"}</span>
-              {parcel?.subDivision && parcel.subDivision.value && <FieldConfidenceBadge confidence={parcel.subDivision.confidence} />}
-            </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Sub-Division / Hissa</span>
+            {isEditing ? (
+              <Input
+                value={parcel?.subDivision?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.parcelIdentifiers) prev.parcelIdentifiers = {};
+                    prev.parcelIdentifiers.subDivision = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.parcelIdentifiers.subDivision?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs font-mono bg-background"
+                placeholder="Sub-Division"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground font-mono">{parcel?.subDivision?.value || "—"}</span>
+                {parcel?.subDivision && parcel.subDivision.value && <FieldConfidenceBadge confidence={parcel.subDivision.confidence} />}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Plot Number</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground font-mono">{parcel?.plotNumber?.value || parcel?.surveyNumber?.value || "—"}</span>
-              {parcel?.plotNumber && parcel.plotNumber.value && <FieldConfidenceBadge confidence={parcel.plotNumber.confidence} />}
-            </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Plot Number</span>
+            {isEditing ? (
+              <Input
+                value={parcel?.plotNumber?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.parcelIdentifiers) prev.parcelIdentifiers = {};
+                    prev.parcelIdentifiers.plotNumber = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.parcelIdentifiers.plotNumber?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs font-mono bg-background"
+                placeholder="Plot No"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground font-mono">{parcel?.plotNumber?.value || parcel?.surveyNumber?.value || "—"}</span>
+                {parcel?.plotNumber && parcel.plotNumber.value && <FieldConfidenceBadge confidence={parcel.plotNumber.confidence} />}
+              </div>
+            )}
           </div>
 
-          {hasValue(parcel?.khataNumber) && (
-            <div className="space-y-0.5">
-              <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Khata Number</span>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground font-mono">{parcel?.khataNumber?.value}</span>
-                <FieldConfidenceBadge confidence={parcel?.khataNumber?.confidence} />
-              </div>
-            </div>
-          )}
-
-          {hasValue(parcel?.pattaNumber) && (
-            <div className="space-y-0.5">
-              <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Patta Number</span>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground font-mono">{parcel?.pattaNumber?.value}</span>
-                <FieldConfidenceBadge confidence={parcel?.pattaNumber?.confidence} />
-              </div>
-            </div>
-          )}
-
-          {hasValue(parcel?.oldSurveyNumber) && (
-            <div className="space-y-0.5">
-              <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Old Survey No</span>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-foreground font-mono">{parcel?.oldSurveyNumber?.value}</span>
-                <FieldConfidenceBadge confidence={parcel?.oldSurveyNumber?.confidence} />
-              </div>
-            </div>
-          )}
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Khata Number</span>
+            {isEditing ? (
+              <Input
+                value={parcel?.khataNumber?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.parcelIdentifiers) prev.parcelIdentifiers = {};
+                    prev.parcelIdentifiers.khataNumber = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.parcelIdentifiers.khataNumber?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs font-mono bg-background"
+                placeholder="Khata No"
+              />
+            ) : (
+              hasValue(parcel?.khataNumber) && (
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground font-mono">{parcel?.khataNumber?.value}</span>
+                  <FieldConfidenceBadge confidence={parcel?.khataNumber?.confidence} />
+                </div>
+              )
+            )}
+          </div>
         </div>
       </div>
 
@@ -148,33 +299,84 @@ export function ParcelView({ data }: ParcelViewProps) {
           </div>
         </div>
         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Total Extent</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">
-                {extent?.totalArea?.value || "—"} {extent?.areaUnit?.value || ""}
-              </span>
-              {extent?.totalArea && extent.totalArea.value && <FieldConfidenceBadge confidence={extent.totalArea.confidence} />}
-            </div>
-            {extent?.totalArea?.evidence && <FieldEvidenceQuote evidence={extent.totalArea.evidence} />}
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Total Extent</span>
+            {isEditing ? (
+              <div className="flex gap-1">
+                <Input
+                  value={extent?.totalArea?.value || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleUpdate((prev) => {
+                      if (!prev.extent) prev.extent = {};
+                      prev.extent.totalArea = {
+                        value: val,
+                        confidence: 100,
+                        evidence: prev.extent.totalArea?.evidence || "Manual edit",
+                      };
+                      return prev;
+                    });
+                  }}
+                  className="h-7 text-xs font-mono bg-background flex-1"
+                  placeholder="Area"
+                />
+                <Input
+                  value={extent?.areaUnit?.value || "Ha"}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleUpdate((prev) => {
+                      if (!prev.extent) prev.extent = {};
+                      prev.extent.areaUnit = {
+                        value: val,
+                        confidence: 100,
+                        evidence: prev.extent.areaUnit?.evidence || "Manual edit",
+                      };
+                      return prev;
+                    });
+                  }}
+                  className="h-7 text-xs font-mono w-14 bg-background"
+                  placeholder="Unit"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">
+                  {extent?.totalArea?.value || "—"} {extent?.areaUnit?.value || ""}
+                </span>
+                {extent?.totalArea && extent.totalArea.value && <FieldConfidenceBadge confidence={extent.totalArea.confidence} />}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Land Classification</span>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">{extent?.landClassification?.value || "—"}</span>
-              {extent?.landClassification && extent.landClassification.value && (
-                <FieldConfidenceBadge confidence={extent.landClassification.confidence} />
-              )}
-            </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider block">Land Classification</span>
+            {isEditing ? (
+              <Input
+                value={extent?.landClassification?.value || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate((prev) => {
+                    if (!prev.extent) prev.extent = {};
+                    prev.extent.landClassification = {
+                      value: val,
+                      confidence: 100,
+                      evidence: prev.extent.landClassification?.evidence || "Manual edit",
+                    };
+                    return prev;
+                  });
+                }}
+                className="h-7 text-xs bg-background"
+                placeholder="Classification"
+              />
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">{extent?.landClassification?.value || "—"}</span>
+                {extent?.landClassification && extent.landClassification.value && (
+                  <FieldConfidenceBadge confidence={extent.landClassification.confidence} />
+                )}
+              </div>
+            )}
           </div>
-
-          {hasValue(extent?.cultivatedArea) && (
-            <div className="space-y-0.5">
-              <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">Cultivated Area</span>
-              <span className="font-semibold text-foreground">{extent?.cultivatedArea?.value}</span>
-            </div>
-          )}
         </div>
       </div>
 

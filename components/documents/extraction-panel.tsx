@@ -7,6 +7,7 @@ import {
   Layers01Icon,
   File01Icon,
   CheckmarkCircle02Icon,
+  Edit02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
@@ -48,16 +49,39 @@ export function ExtractionPanel({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isSavingMeta, setIsSavingMeta] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [selectedState, setSelectedState] = useState<string>(document.state || "");
   const [selectedDocType, setSelectedDocType] = useState<string>(document.documentType || "ownership");
 
+  // Manage editable extraction data locally
+  const [extractedData, setExtractedData] = useState<StructuredLandRecordExtraction | null>(
+    (document.extractedData as StructuredLandRecordExtraction | null) || null
+  );
+  const [hasEdits, setHasEdits] = useState(false);
+  const [prevExtractedProp, setPrevExtractedProp] = useState(document.extractedData);
+
+  // Sync state if external document extraction data changes (e.g. after reprocess)
+  if (document.extractedData !== prevExtractedProp) {
+    setPrevExtractedProp(document.extractedData);
+    setExtractedData((document.extractedData as StructuredLandRecordExtraction | null) || null);
+    setHasEdits(false);
+  }
+
   const status = document.status;
   const errorDetails = document.errorDetails as DocumentErrorDetails | null;
-
-  // Use document.extractedData as primary source
-  const extractedObj = (document.extractedData as StructuredLandRecordExtraction | null) || null;
   const confidenceScore = document.confidenceScore;
+
+  const handleDataChange = (updated: StructuredLandRecordExtraction) => {
+    setExtractedData(updated);
+    setHasEdits(true);
+  };
+
+  const handleClearEdits = () => {
+    setExtractedData((document.extractedData as StructuredLandRecordExtraction | null) || null);
+    setHasEdits(false);
+    toast.info("Edits cleared. Reverted to last saved record.");
+  };
 
   const handleSaveMetadataAndProcess = async () => {
     setIsProcessing(true);
@@ -109,6 +133,8 @@ export function ExtractionPanel({
     try {
       const res = await fetch(`/api/documents/${document.id}/commit`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(extractedData || document.extractedData),
       });
 
       const json = await res.json();
@@ -118,6 +144,8 @@ export function ExtractionPanel({
         );
       } else {
         toast.success("Land record verified and saved to official registry!");
+        setHasEdits(false);
+        setIsEditing(false);
         onRefresh?.();
       }
     } catch {
@@ -134,7 +162,7 @@ export function ExtractionPanel({
 
   return (
     <div className="flex flex-col h-full rounded-lg border border-border bg-card shadow-xs overflow-hidden">
-      {/* Streamlined Header Bar */}
+      {/* Streamlined Header Bar with identical h-11 height */}
       <div className="h-11 px-3.5 border-b border-border bg-muted/40 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <HugeiconsIcon icon={Layers01Icon} className="size-4 shrink-0 text-primary" />
@@ -142,11 +170,42 @@ export function ExtractionPanel({
             {docTypeLabel}
           </h2>
           {confidenceScore !== null && confidenceScore !== undefined && status === "extracted" && (
-            <FieldConfidenceBadge confidence={confidenceScore} />
+            <FieldConfidenceBadge confidence={hasEdits ? 100 : confidenceScore} />
           )}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Edit Fields Toggle Button */}
+          {(status === "extracted" || status === "committed") && (
+            <Button
+              type="button"
+              variant={isEditing ? "default" : "outline"}
+              size="xs"
+              onClick={() => setIsEditing(!isEditing)}
+              disabled={isProcessing || isCommitting}
+              className="gap-1 font-sans text-xs h-7 px-2.5 transition-all"
+              title={isEditing ? "Done editing" : "Edit extracted fields"}
+            >
+              <HugeiconsIcon icon={Edit02Icon} className="size-3.5" />
+              <span>{isEditing ? "Done Editing" : "Edit Fields"}</span>
+            </Button>
+          )}
+
+          {/* Clear Edits Button (when reviewer has modified values) */}
+          {hasEdits && (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={handleClearEdits}
+              disabled={isCommitting}
+              className="font-sans text-xs h-7 px-2.5 border-rose-500/40 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10"
+              title="Clear modifications and revert to saved record"
+            >
+              <span>Clear</span>
+            </Button>
+          )}
+
           {(status === "extracted" || status === "failed") && (
             <Button
               variant="outline"
@@ -169,7 +228,7 @@ export function ExtractionPanel({
             </Button>
           )}
 
-          {status === "extracted" && (
+          {(status === "extracted" || (status === "committed" && (isEditing || hasEdits))) && (
             <Button
               size="xs"
               onClick={handleCommit}
@@ -193,7 +252,7 @@ export function ExtractionPanel({
             </Button>
           )}
 
-          {status === "committed" && (
+          {status === "committed" && !isEditing && !hasEdits && (
             <span className="inline-flex items-center gap-1 text-[11px] font-sans font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
               <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
               <span>Verified & Registered</span>
@@ -204,6 +263,16 @@ export function ExtractionPanel({
 
       {/* Body Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 font-sans">
+        {/* Reviewer Edits Banner Notice */}
+        {hasEdits && (
+          <div className="flex items-center justify-between text-xs px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-300">
+            <span>You have modified fields in this record.</span>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              Click &quot;Approve &amp; Save&quot; to permanently commit.
+            </span>
+          </div>
+        )}
+
         {/* State 1: Uploaded (Not yet processed) */}
         {status === "uploaded" && !isProcessing && (
           <div className="flex flex-col items-center justify-center py-8 px-4 text-center space-y-4 max-w-md mx-auto">
@@ -422,27 +491,51 @@ export function ExtractionPanel({
         {/* State 4: Extracted or Committed Successfully */}
         {(status === "extracted" || status === "committed") && !isProcessing && (
           <div className="space-y-3">
-            {/* Document-Type Specific View Component */}
+            {/* Document-Type Specific View Component with Editing capability */}
             {(() => {
               switch (document.documentType) {
                 case "ownership":
-                  return <OwnershipView data={extractedObj} />;
+                  return (
+                    <OwnershipView
+                      data={extractedData}
+                      isEditing={isEditing}
+                      onChange={handleDataChange}
+                    />
+                  );
                 case "parcel":
-                  return <ParcelView data={extractedObj} />;
-                case "mutation":
-                  return <MutationView data={extractedObj} />;
-                case "cultivation":
-                  return <CultivationView data={extractedObj} />;
-                case "account_holding":
-                  return <AccountHoldingView data={extractedObj} />;
-                case "encumbrance":
-                  return <EncumbranceView data={extractedObj} />;
-                case "spatial_map":
-                  return <SpatialMapView data={extractedObj} />;
+                  return (
+                    <ParcelView
+                      data={extractedData}
+                      isEditing={isEditing}
+                      onChange={handleDataChange}
+                    />
+                  );
                 case "property_card":
-                  return <PropertyCardView data={extractedObj} />;
+                  return (
+                    <PropertyCardView
+                      data={extractedData}
+                      isEditing={isEditing}
+                      onChange={handleDataChange}
+                    />
+                  );
+                case "mutation":
+                  return <MutationView data={extractedData} />;
+                case "cultivation":
+                  return <CultivationView data={extractedData} />;
+                case "account_holding":
+                  return <AccountHoldingView data={extractedData} />;
+                case "encumbrance":
+                  return <EncumbranceView data={extractedData} />;
+                case "spatial_map":
+                  return <SpatialMapView data={extractedData} />;
                 default:
-                  return <OwnershipView data={extractedObj} />;
+                  return (
+                    <OwnershipView
+                      data={extractedData}
+                      isEditing={isEditing}
+                      onChange={handleDataChange}
+                    />
+                  );
               }
             })()}
           </div>
